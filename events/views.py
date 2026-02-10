@@ -155,14 +155,20 @@ class EventViewSet(viewsets.ModelViewSet):
 
         # Track view if user is authenticated
         if request.user.is_authenticated:
-            content_type = ContentType.objects.get_for_model(Event)
-            View.objects.get_or_create(
-                user=request.user,
-                content_type=content_type,
-                object_id=instance.id
-            )
-            instance.views_count = F('views_count') + 1
-            instance.save(update_fields=['views_count'])
+            try:
+                content_type = ContentType.objects.get_for_model(Event)
+                # Convert UUID to string to avoid SQLite INTEGER overflow
+                View.objects.get_or_create(
+                    user=request.user,
+                    content_type=content_type,
+                    object_id=str(instance.id)  # Convert UUID to string
+                )
+                instance.views_count = F('views_count') + 1
+                instance.save(update_fields=['views_count'])
+                instance.refresh_from_db()
+            except Exception as e:
+                # Log error but don't fail the request
+                print(f"Error tracking view: {e}")
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
@@ -264,17 +270,19 @@ class EventViewSet(viewsets.ModelViewSet):
         like, created = Like.objects.get_or_create(
             user=request.user,
             content_type=content_type,
-            object_id=event.id
+            object_id=str(event.id)  # Convert UUID to string
         )
 
         if not created:
             like.delete()
             event.likes_count = F('likes_count') - 1
             event.save(update_fields=['likes_count'])
+            event.refresh_from_db()
             return Response({'liked': False, 'likes_count': event.likes_count})
 
         event.likes_count = F('likes_count') + 1
         event.save(update_fields=['likes_count'])
+        event.refresh_from_db()
         return Response({'liked': True, 'likes_count': event.likes_count})
 
     @action(detail=True, methods=['post'])
@@ -286,7 +294,7 @@ class EventViewSet(viewsets.ModelViewSet):
         bookmark, created = Bookmark.objects.get_or_create(
             user=request.user,
             content_type=content_type,
-            object_id=event.id
+            object_id=str(event.id)  # Convert UUID to string
         )
 
         if not created:
@@ -305,12 +313,13 @@ class EventViewSet(viewsets.ModelViewSet):
         share = Share.objects.create(
             user=request.user,
             content_type=content_type,
-            object_id=event.id,
+            object_id=str(event.id),  # Convert UUID to string
             platform=platform
         )
 
         event.shares_count = F('shares_count') + 1
         event.save(update_fields=['shares_count'])
+        event.refresh_from_db()
 
         return Response({
             'shared': True,

@@ -139,7 +139,7 @@ class UserProfile(models.Model):
     skills = models.JSONField(_('skills'), default=list, blank=True)
 
     # Interests
-    interests = models.ManyToManyField('tags.Tag', related_name='interested_users', blank=True)
+    # interests = models.ManyToManyField('tags.Tag', related_name='interested_users', blank=True)
 
     # Privacy Settings
     show_email = models.BooleanField(_('show email'), default=False)

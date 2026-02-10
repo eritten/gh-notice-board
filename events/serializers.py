@@ -26,6 +26,10 @@ class EventMinimalSerializer(serializers.ModelSerializer):
     organizer = UserMinimalSerializer(read_only=True)
     category = EventCategorySerializer(read_only=True)
 
+    class Meta:
+        model = Event
+        fields = ['id', 'title', 'slug', 'summary', 'featured_image', 'category', 'organizer', 'start_date', 'end_date']
+
 
 class EventSpeakerSerializer(serializers.ModelSerializer):
     """Serializer for event speakers"""
@@ -75,7 +79,7 @@ class EventRegistrationSerializer(serializers.ModelSerializer):
 class EventListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for event lists"""
     organizer = UserMinimalSerializer(read_only=True)
-    category = CategorySerializer(read_only=True)
+    category = EventCategorySerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
 
     # Engagement and status
@@ -119,7 +123,7 @@ class EventListSerializer(serializers.ModelSerializer):
             return Like.objects.filter(
                 user=request.user,
                 content_type=content_type,
-                object_id=obj.id
+                object_id=str(obj.id)  # Convert UUID to string
             ).exists()
         return False
 
@@ -130,7 +134,7 @@ class EventListSerializer(serializers.ModelSerializer):
             return Bookmark.objects.filter(
                 user=request.user,
                 content_type=content_type,
-                object_id=obj.id
+                object_id=str(obj.id)  # Convert UUID to string
             ).exists()
         return False
 
@@ -257,7 +261,7 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
                 ContentTag.objects.create(
                     tag=tag,
                     content_type='event',
-                    object_id=event.id,
+                    object_id=str(event.id),  # Convert UUID to string
                     created_by=self.context['request'].user
                 )
                 tag.increment_usage()
@@ -297,7 +301,7 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
             # Remove existing tags
             ContentTag.objects.filter(
                 content_type='event',
-                object_id=instance.id
+                object_id=str(instance.id)  # Convert UUID to string
             ).delete()
 
             # Add new tags
@@ -306,7 +310,7 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
                 ContentTag.objects.create(
                     tag=tag,
                     content_type='event',
-                    object_id=instance.id,
+                    object_id=str(instance.id),  # Convert UUID to string
                     created_by=self.context['request'].user
                 )
 
@@ -415,28 +419,28 @@ class EventEngagementSerializer(serializers.Serializer):
             Like.objects.get_or_create(
                 user=user,
                 content_type=content_type,
-                object_id=event.id
+                object_id=str(event.id)  # Convert UUID to string
             )
             event.likes_count += 1
         elif action == 'unlike':
             Like.objects.filter(
                 user=user,
                 content_type=content_type,
-                object_id=event.id
+                object_id=str(event.id)  # Convert UUID to string
             ).delete()
             event.likes_count = max(0, event.likes_count - 1)
         elif action == 'bookmark':
             Bookmark.objects.get_or_create(
                 user=user,
                 content_type=content_type,
-                object_id=event.id
+                object_id=str(event.id)  # Convert UUID to string
             )
             event.bookmarks_count += 1
         elif action == 'unbookmark':
             Bookmark.objects.filter(
                 user=user,
                 content_type=content_type,
-                object_id=event.id
+                object_id=str(event.id)  # Convert UUID to string
             ).delete()
             event.bookmarks_count = max(0, event.bookmarks_count - 1)
 

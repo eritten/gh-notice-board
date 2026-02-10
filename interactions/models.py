@@ -14,7 +14,7 @@ class Like(models.Model):
 
     # Generic relation to any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.CharField(max_length=255)  # Support both int and UUID
     content_object = GenericForeignKey('content_type', 'object_id')
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -36,7 +36,7 @@ class Dislike(models.Model):
 
     # Generic relation to any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.CharField(max_length=255)  # Support both int and UUID
     content_object = GenericForeignKey('content_type', 'object_id')
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -58,7 +58,7 @@ class Review(models.Model):
 
     # Generic relation to any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.CharField(max_length=255)  # Support both int and UUID
     content_object = GenericForeignKey('content_type', 'object_id')
 
     # Review fields
@@ -94,7 +94,7 @@ class Bookmark(models.Model):
 
     # Generic relation to any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.CharField(max_length=255)  # Support both int and UUID
     content_object = GenericForeignKey('content_type', 'object_id')
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -117,7 +117,7 @@ class Share(models.Model):
 
     # Generic relation to any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.CharField(max_length=255)  # Support both int and UUID
     content_object = GenericForeignKey('content_type', 'object_id')
 
     # Share details
@@ -151,7 +151,7 @@ class Comment(models.Model):
 
     # Generic relation to any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.CharField(max_length=255)  # Support both int and UUID
     content_object = GenericForeignKey('content_type', 'object_id')
 
     # Comment content
@@ -216,7 +216,7 @@ class View(models.Model):
 
     # Generic relation to any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.CharField(max_length=255)  # Support both int and UUID
     content_object = GenericForeignKey('content_type', 'object_id')
 
     # View details
@@ -255,7 +255,7 @@ class Report(models.Model):
 
     # Generic relation to any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.CharField(max_length=255)  # Support both int and UUID
     content_object = GenericForeignKey('content_type', 'object_id')
 
     # Report details
