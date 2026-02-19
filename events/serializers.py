@@ -10,6 +10,23 @@ from .models import Event, EventCategory, EventRegistration, EventImage, EventSp
 User = get_user_model()
 
 
+class ExternalImageURLField(serializers.CharField):
+    """Store external image URL string on image-backed model fields."""
+
+    def to_internal_value(self, data):
+        value = super().to_internal_value(data).strip()
+        if value and not (value.startswith('http://') or value.startswith('https://')):
+            raise serializers.ValidationError("Provide a valid http(s) image URL.")
+        return value
+
+    def to_representation(self, value):
+        if not value:
+            return ''
+        if hasattr(value, 'name'):
+            return value.name or ''
+        return str(value)
+
+
 class EventCategorySerializer(serializers.ModelSerializer):
     """Serializer for event categories"""
     events_count = serializers.IntegerField(read_only=True, default=0)
@@ -31,8 +48,9 @@ class EventMinimalSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'slug', 'summary', 'featured_image', 'category', 'organizer', 'start_date', 'end_date']
 
 
-class EventSpeakerSerializer(serializers.ModelSerializer):
-    """Serializer for event speakers"""
+class EventFeaturedGuestSerializer(serializers.ModelSerializer):
+    """Serializer for event featured guests"""
+    photo = ExternalImageURLField(required=False, allow_blank=True)
 
     class Meta:
         model = EventSpeaker
@@ -42,8 +60,13 @@ class EventSpeakerSerializer(serializers.ModelSerializer):
         ]
 
 
+class EventSpeakerSerializer(EventFeaturedGuestSerializer):
+    """Backward compatible alias for featured guests serializer."""
+
+
 class EventSponsorSerializer(serializers.ModelSerializer):
     """Serializer for event sponsors"""
+    logo = ExternalImageURLField()
 
     class Meta:
         model = EventSponsor
@@ -98,7 +121,7 @@ class EventListSerializer(serializers.ModelSerializer):
             'category', 'tags', 'organizer', 'venue_name', 'venue_address',
             'event_type', 'start_date', 'end_date', 'timezone',
             'is_featured', 'is_trending', 'status',
-            'registration_required', 'max_attendees', 'registered_count',
+            'registration_required', 'registration_url', 'max_attendees', 'registered_count',
             'views_count', 'likes_count', 'shares_count',
             'user_registered', 'user_liked', 'user_bookmarked',
             'is_upcoming', 'is_ongoing', 'is_past', 'days_until',
@@ -153,7 +176,9 @@ class EventListSerializer(serializers.ModelSerializer):
 
 class EventDetailSerializer(EventListSerializer):
     """Detailed serializer for event view"""
-    speakers = EventSpeakerSerializer(many=True, read_only=True)
+    featured_guests = EventFeaturedGuestSerializer(
+        source='speakers', many=True, read_only=True
+    )
     sponsors = EventSponsorSerializer(many=True, read_only=True)
     gallery_images = EventImageSerializer(many=True, read_only=True)
 
@@ -169,7 +194,7 @@ class EventDetailSerializer(EventListSerializer):
             'covid_safety_measures', 'parking_info', 'accessibility_info',
             'contact_email', 'contact_phone', 'website_url',
             'facebook_event_url', 'livestream_url',
-            'speakers', 'sponsors', 'gallery_images',
+            'featured_guests', 'sponsors', 'gallery_images',
             'registration_list', 'related_events',
             'is_cancelled', 'cancellation_reason',
             'allow_waitlist', 'waitlist_count',
@@ -214,7 +239,7 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
-    speakers_data = EventSpeakerSerializer(many=True, required=False)
+    featured_guests_data = EventFeaturedGuestSerializer(many=True, required=False)
     sponsors_data = EventSponsorSerializer(many=True, required=False)
     gallery_images = EventImageSerializer(many=True, read_only=True)
     uploaded_images = serializers.ListField(
@@ -231,19 +256,53 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
             'venue_name', 'venue_address', 'venue_details', 'venue_map_url',
             'event_type', 'start_date', 'end_date', 'timezone',
             'virtual_meeting_url', 'virtual_meeting_password',
-            'registration_required', 'max_attendees', 'allow_waitlist',
+            'registration_required', 'registration_url', 'max_attendees', 'allow_waitlist',
             'price', 'early_bird_price', 'early_bird_deadline',
             'registration_instructions', 'cancellation_policy',
             'covid_safety_measures', 'parking_info', 'accessibility_info',
             'contact_email', 'contact_phone', 'website_url',
             'facebook_event_url', 'livestream_url',
             'is_featured', 'is_trending', 'status',
-            'speakers_data', 'sponsors_data', 'gallery_images', 'uploaded_images'
+            'featured_guests_data', 'sponsors_data', 'gallery_images', 'uploaded_images'
         ]
+
+    def validate(self, attrs):
+        start_date = attrs.get('start_date', getattr(self.instance, 'start_date', None))
+        end_date = attrs.get('end_date', getattr(self.instance, 'end_date', None))
+        registration_required = attrs.get(
+            'registration_required',
+            getattr(self.instance, 'registration_required', True)
+        )
+        registration_url = attrs.get(
+            'registration_url',
+            getattr(self.instance, 'registration_url', '')
+        )
+        price = attrs.get('price', getattr(self.instance, 'price', 0))
+        early_bird_price = attrs.get(
+            'early_bird_price',
+            getattr(self.instance, 'early_bird_price', None)
+        )
+
+        if start_date and end_date and end_date <= start_date:
+            raise serializers.ValidationError(
+                {'end_date': 'End date must be later than start date.'}
+            )
+
+        if registration_required and not registration_url:
+            raise serializers.ValidationError(
+                {'registration_url': 'Provide an external registration/ticket link.'}
+            )
+
+        if early_bird_price is not None and price is not None and early_bird_price > price:
+            raise serializers.ValidationError(
+                {'early_bird_price': 'Early bird price cannot be greater than the regular price.'}
+            )
+
+        return attrs
 
     def create(self, validated_data):
         tags_ids = validated_data.pop('tags_ids', [])
-        speakers_data = validated_data.pop('speakers_data', [])
+        featured_guests_data = validated_data.pop('featured_guests_data', [])
         sponsors_data = validated_data.pop('sponsors_data', [])
         uploaded_images = validated_data.pop('uploaded_images', [])
 
@@ -266,9 +325,9 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
                 )
                 tag.increment_usage()
 
-        # Add speakers
-        for speaker_data in speakers_data:
-            EventSpeaker.objects.create(event=event, **speaker_data)
+        # Add featured guests
+        for guest_data in featured_guests_data:
+            EventSpeaker.objects.create(event=event, **guest_data)
 
         # Add sponsors
         for sponsor_data in sponsors_data:
@@ -286,7 +345,7 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         tags_ids = validated_data.pop('tags_ids', None)
-        speakers_data = validated_data.pop('speakers_data', None)
+        featured_guests_data = validated_data.pop('featured_guests_data', None)
         sponsors_data = validated_data.pop('sponsors_data', None)
         uploaded_images = validated_data.pop('uploaded_images', [])
 
@@ -314,11 +373,11 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
                     created_by=self.context['request'].user
                 )
 
-        # Update speakers if provided
-        if speakers_data is not None:
+        # Update featured guests if provided
+        if featured_guests_data is not None:
             instance.speakers.all().delete()
-            for speaker_data in speakers_data:
-                EventSpeaker.objects.create(event=instance, **speaker_data)
+            for guest_data in featured_guests_data:
+                EventSpeaker.objects.create(event=instance, **guest_data)
 
         # Update sponsors if provided
         if sponsors_data is not None:
@@ -351,6 +410,11 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
         if value.status != 'published':
             raise serializers.ValidationError(
                 "Event is not available for registration.")
+
+        if value.registration_url:
+            raise serializers.ValidationError(
+                "This event uses external registration. Use registration_url."
+            )
 
         if value.is_cancelled:
             raise serializers.ValidationError("Event has been cancelled.")

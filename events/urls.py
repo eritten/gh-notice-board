@@ -1,13 +1,14 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    EventCategoryViewSet, EventViewSet, EventSpeakerViewSet,
+    EventCategoryViewSet, EventViewSet, EventSpeakerViewSet, EventFeaturedGuestViewSet,
     EventSponsorViewSet, EventRegistrationViewSet
 )
 
 router = DefaultRouter()
 router.register(r'categories', EventCategoryViewSet, basename='event-category')
 router.register(r'events', EventViewSet, basename='event')
+router.register(r'featured-guests', EventFeaturedGuestViewSet, basename='event-featured-guest')
 router.register(r'speakers', EventSpeakerViewSet, basename='event-speaker')
 router.register(r'sponsors', EventSponsorViewSet, basename='event-sponsor')
 router.register(r'registrations', EventRegistrationViewSet, basename='event-registration')

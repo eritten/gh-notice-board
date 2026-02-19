@@ -11,7 +11,7 @@ from .models import Event, EventCategory, EventRegistration, EventSpeaker, Event
 from .serializers import (
     EventListSerializer, EventDetailSerializer, EventCreateUpdateSerializer,
     EventCategorySerializer, EventRegistrationSerializer,
-    EventRegistrationCreateSerializer, EventSpeakerSerializer,
+    EventRegistrationCreateSerializer, EventFeaturedGuestSerializer,
     EventSponsorSerializer
 )
 from interactions.models import Like, Bookmark, View, Share
@@ -112,7 +112,7 @@ class EventViewSet(viewsets.ModelViewSet):
                      'organization_name', 'organizer__username']
     ordering_fields = [
         'start_date', 'end_date', 'created_at', 'views_count',
-        'likes_count', 'shares_count', 'registration_count', 'price'
+        'likes_count', 'shares_count', 'registered_count', 'price'
     ]
     ordering = ['start_date']
     lookup_field = 'slug'
@@ -178,6 +178,16 @@ class EventViewSet(viewsets.ModelViewSet):
         """Register for an event"""
         event = self.get_object()
 
+        # External registration flow
+        if event.registration_url:
+            return Response(
+                {
+                    'detail': 'This event uses external registration.',
+                    'registration_url': event.registration_url
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Check if event is open for registration
         if event.status != 'published':
             return Response(
@@ -191,7 +201,7 @@ class EventViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if event.max_attendees and event.registration_count >= event.max_attendees:
+        if event.max_attendees and event.registered_count >= event.max_attendees:
             return Response(
                 {'detail': 'Event is fully booked'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -230,8 +240,8 @@ class EventViewSet(viewsets.ModelViewSet):
             registration.save()
 
             # Update event registration count
-            event.registration_count = F('registration_count') - 1
-            event.save(update_fields=['registration_count'])
+            event.registered_count = F('registered_count') - 1
+            event.save(update_fields=['registered_count'])
 
             return Response({'detail': 'Registration cancelled successfully'})
         except EventRegistration.DoesNotExist:
@@ -372,7 +382,7 @@ class EventViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def popular(self, request):
         """Get popular events based on registrations"""
-        events = self.get_queryset().order_by('-registration_count')[:20]
+        events = self.get_queryset().order_by('-registered_count')[:20]
         serializer = self.get_serializer(events, many=True)
         return Response(serializer.data)
 
@@ -439,10 +449,10 @@ class EventViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class EventSpeakerViewSet(viewsets.ModelViewSet):
-    """ViewSet for event speakers"""
+class EventFeaturedGuestViewSet(viewsets.ModelViewSet):
+    """ViewSet for event featured guests"""
     queryset = EventSpeaker.objects.select_related('event')
-    serializer_class = EventSpeakerSerializer
+    serializer_class = EventFeaturedGuestSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
@@ -451,6 +461,10 @@ class EventSpeakerViewSet(viewsets.ModelViewSet):
         if event_id:
             queryset = queryset.filter(event__id=event_id)
         return queryset
+
+
+class EventSpeakerViewSet(EventFeaturedGuestViewSet):
+    """Backward compatible alias for featured guests endpoint."""
 
 
 class EventSponsorViewSet(viewsets.ModelViewSet):
