@@ -5,7 +5,7 @@ from .views import (
     ReviewListCreateView,
     ReviewDetailView,
     BookmarkToggleView,
-    UserBookmarksView,
+    BookmarkView,
     InteractionStatsView
 )
 
@@ -20,7 +20,7 @@ urlpatterns = [
 
     # Bookmarks
     path('interactions/bookmark/', BookmarkToggleView.as_view(), name='bookmark-toggle'),
-    path('interactions/bookmarks/', UserBookmarksView.as_view(), name='user-bookmarks'),
+    path('interactions/bookmarks/', BookmarkView.as_view(), name='bookmarks'),
 
     # Statistics
     path('interactions/stats/', InteractionStatsView.as_view(), name='interaction-stats'),

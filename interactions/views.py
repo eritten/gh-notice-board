@@ -6,7 +6,8 @@ from django.db.models import Avg
 from .models import Like, Dislike, Review, Bookmark
 from .serializers import (
     LikeSerializer, DislikeSerializer, ReviewSerializer,
-    BookmarkSerializer, InteractionStatsSerializer
+    BookmarkSerializer, BookmarkCreateSerializer, BookmarkDeleteSerializer,
+    InteractionStatsSerializer, BOOKMARK_TYPE_MODEL_MAP, normalize_bookmark_type
 )
 
 
@@ -188,6 +189,67 @@ class UserBookmarksView(generics.ListAPIView):
 
     def get_queryset(self):
         return Bookmark.objects.filter(user=self.request.user)
+
+
+class BookmarkView(APIView):
+    """Create, list, and delete bookmarks across supported content types."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        queryset = Bookmark.objects.filter(user=request.user)
+
+        bookmark_type = request.query_params.get('type')
+        if bookmark_type:
+            normalized_type = normalize_bookmark_type(bookmark_type)
+            if not normalized_type:
+                allowed_types = ', '.join(sorted(BOOKMARK_TYPE_MODEL_MAP.keys()))
+                return Response({
+                    'error': f"Unsupported type '{bookmark_type}'. Use one of: {allowed_types}."
+                }, status=status.HTTP_400_BAD_REQUEST)
+            content_type = ContentType.objects.get_for_model(BOOKMARK_TYPE_MODEL_MAP[normalized_type])
+            queryset = queryset.filter(content_type=content_type)
+
+        serializer = BookmarkSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = BookmarkCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        bookmark, created = Bookmark.objects.get_or_create(
+            user=request.user,
+            content_type=serializer.validated_data['content_type'],
+            object_id=serializer.validated_data['object_id']
+        )
+
+        response_data = {
+            'message': 'Bookmarked' if created else 'Already bookmarked',
+            'bookmarked': True,
+            'bookmark': BookmarkSerializer(bookmark, context={'request': request}).data
+        }
+        response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(response_data, status=response_status)
+
+    def delete(self, request):
+        serializer = BookmarkDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        deleted_count, _ = Bookmark.objects.filter(
+            user=request.user,
+            content_type=serializer.validated_data['content_type'],
+            object_id=serializer.validated_data['object_id']
+        ).delete()
+
+        if deleted_count == 0:
+            return Response({
+                'message': 'Bookmark was not found',
+                'bookmarked': False
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            'message': 'Bookmark removed',
+            'bookmarked': False
+        }, status=status.HTTP_200_OK)
 
 
 class InteractionStatsView(APIView):
